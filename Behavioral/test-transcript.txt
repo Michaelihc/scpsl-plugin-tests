@@ -1,0 +1,20 @@
+BehaviorTestHarness test transcript
+
+Date: 2026-05-31
+
+HSM UI capture protocol update:
+- Replaced behavioral UI capture config names with capture_hsm_ui, render_hsm_ui_screenshots, and render_hsm_ui_on_manual_capture.
+- Replaced the old UI capture subscriber with a HintServiceMeow snapshot path that reads live HSM PlayerDisplay entries and writes .tests/UI render-image.js compatible JSON.
+- Updated the behavioral test README and implementation notes to require HSM-backed UI capture for new UI-producing behavior scenarios.
+
+Build verification:
+- Command: dotnet build .\.tests\Behavioral\BehaviorTestHarness.csproj --no-restore
+- Result: build succeeded, 0 warnings, 0 errors.
+
+Renderer verification:
+- Command: node smoke-test.js
+- Working directory: .\.tests\UI
+- Result: parsed_entries=39 static_issues=0.
+
+Live verification:
+- Not run in this pass. The behavioral harness change was build-verified and renderer-verified; live server validation still needs a test scenario with HSM hints loaded.

@@ -1,0 +1,443 @@
+:root {
+  color-scheme: dark;
+  --bg: #080909;
+  --panel: #151818;
+  --panel-2: #101313;
+  --line: #2c3331;
+  --text: #f1f5f2;
+  --muted: #9aa49e;
+  --red: #ff332a;
+  --cyan: #66f2c0;
+  --amber: #e6cf72;
+  --blue: #3aa7ff;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Segoe UI", Arial, sans-serif;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+.shell {
+  display: grid;
+  grid-template-columns: 360px minmax(0, 1fr);
+  height: 100vh;
+}
+
+.panel {
+  min-height: 0;
+  overflow: auto;
+  border-right: 1px solid var(--line);
+  background: var(--panel);
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.panelHeader,
+.sectionTitle,
+.stageTopbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.eyebrow {
+  margin: 0 0 2px;
+  color: var(--cyan);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0;
+}
+
+h1,
+h2 {
+  margin: 0;
+}
+
+h1 {
+  font-size: 20px;
+  line-height: 1.2;
+}
+
+h2 {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.2;
+  text-transform: uppercase;
+  letter-spacing: 0;
+}
+
+.statusPill {
+  border: 1px solid rgba(102, 242, 192, 0.4);
+  color: var(--cyan);
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+}
+
+.field {
+  display: grid;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.controlGrid,
+.triple {
+  display: grid;
+  gap: 10px;
+}
+
+.controlGrid {
+  grid-template-columns: 1fr 1fr;
+}
+
+.triple {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+select,
+input[type="number"],
+textarea {
+  width: 100%;
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  color: var(--text);
+  border-radius: 6px;
+}
+
+select,
+input[type="number"] {
+  height: 34px;
+  padding: 0 8px;
+}
+
+input[type="range"] {
+  width: 100%;
+  accent-color: var(--cyan);
+}
+
+textarea {
+  min-height: 96px;
+  resize: vertical;
+  padding: 10px;
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+button {
+  border: 1px solid var(--line);
+  background: #202525;
+  color: var(--text);
+  border-radius: 6px;
+  padding: 7px 10px;
+  cursor: pointer;
+}
+
+button:hover {
+  border-color: #4b5652;
+  background: #252b2b;
+}
+
+.toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.editor,
+.metrics,
+.report {
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+  display: grid;
+  gap: 12px;
+}
+
+.metrics dl {
+  margin: 0;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 7px 12px;
+  font-size: 12px;
+}
+
+.metrics dt {
+  color: var(--muted);
+}
+
+.metrics dd {
+  margin: 0;
+  color: var(--text);
+  font-family: Consolas, "Courier New", monospace;
+}
+
+#validationList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 7px;
+  font-size: 12px;
+}
+
+#validationList li {
+  border-left: 3px solid var(--cyan);
+  padding-left: 8px;
+  color: var(--text);
+}
+
+#validationList li.warn {
+  border-color: var(--amber);
+}
+
+#validationList li.error {
+  border-color: var(--red);
+}
+
+.stageColumn {
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) 132px;
+  gap: 12px;
+  padding: 16px;
+}
+
+.stageTopbar {
+  min-height: 34px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.stageTopbar strong {
+  color: var(--text);
+  font-weight: 700;
+  margin-right: 10px;
+}
+
+.stage {
+  position: relative;
+  width: min(100%, calc(var(--preview-width) * 1px * var(--zoom)));
+  aspect-ratio: var(--preview-width) / var(--preview-height);
+  max-height: 100%;
+  margin: 0 auto;
+  overflow: hidden;
+  border: 1px solid #252b2b;
+  background: #000;
+  box-shadow: 0 22px 80px rgba(0, 0, 0, 0.45);
+}
+
+.gameMock,
+.nativeBackground,
+.backgroundCollisionLayer,
+.hintLayer {
+  position: absolute;
+  inset: 0;
+}
+
+.nativeBackground {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+}
+
+.gameMock {
+  color: #f8f8f8;
+  font-family: "Courier New", Consolas, monospace;
+  pointer-events: none;
+}
+
+.backgroundCollisionLayer {
+  pointer-events: none;
+}
+
+.backgroundCollisionZone {
+  position: absolute;
+  opacity: 0;
+}
+
+.fps {
+  position: absolute;
+  left: 4px;
+  top: 2px;
+  font: 700 22px/1 Consolas, monospace;
+}
+
+.waiting {
+  position: absolute;
+  left: 50%;
+  top: 24%;
+  transform: translateX(-50%);
+  text-align: center;
+  white-space: nowrap;
+}
+
+.waiting .title {
+  font: 400 66px/1.1 "Courier New", Consolas, monospace;
+  letter-spacing: 0;
+}
+
+.waiting .sub {
+  margin-top: 14px;
+  font: 400 34px/1 "Courier New", Consolas, monospace;
+}
+
+.waiting .paused {
+  color: #ff4141;
+}
+
+.playerCard {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 300px;
+  height: 300px;
+  transform: translate(-50%, -50%);
+  border: 4px solid #f2f2f2;
+  display: grid;
+  place-items: center;
+  text-align: center;
+}
+
+.playerCard .num {
+  font: 700 104px/1 "Courier New", Consolas, monospace;
+}
+
+.playerCard .connected {
+  margin-top: 20px;
+  font: 700 26px/1 "Courier New", Consolas, monospace;
+}
+
+.optOut {
+  position: absolute;
+  left: 50%;
+  top: 68%;
+  transform: translateX(-50%);
+  font: 700 25px/1 "Segoe UI", Arial, sans-serif;
+}
+
+.mute {
+  position: absolute;
+  right: 12px;
+  bottom: 11px;
+  font: 700 16px/1 "Segoe UI", Arial, sans-serif;
+}
+
+.hudStats {
+  position: absolute;
+  left: 78px;
+  bottom: 162px;
+  color: #d4dde0;
+  font: 700 16px/1.55 "Segoe UI", Arial, sans-serif;
+}
+
+.hudStats .green {
+  color: #65f2be;
+}
+
+.hudStats .red {
+  color: #ff6b81;
+}
+
+.voice {
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: 390px;
+  height: 120px;
+  border: 2px solid #d7d7d7;
+  border-right: 0;
+  color: #fff;
+  font: 700 42px/1 "Segoe UI", Arial, sans-serif;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.voice small {
+  display: block;
+  margin-top: 8px;
+  font-size: 14px;
+}
+
+.hintLayer {
+  pointer-events: none;
+  font-family: "Microsoft YaHei", "微软雅黑", "Segoe UI", Arial, sans-serif;
+  text-shadow: 0 1px 2px #000, 0 0 4px rgba(0, 0, 0, 0.9);
+}
+
+.hintEntry {
+  position: absolute;
+  white-space: pre;
+  line-height: 1.08;
+  letter-spacing: 0;
+  max-width: none;
+  transform-origin: center center;
+}
+
+.hintEntry[data-align="left"] {
+  text-align: left;
+}
+
+.hintEntry[data-align="center"] {
+  text-align: center;
+}
+
+.hintEntry[data-align="right"] {
+  text-align: right;
+}
+
+.frameList {
+  margin: 0;
+  min-height: 0;
+  overflow: auto;
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+  color: var(--muted);
+  font: 12px/1.45 Consolas, "Courier New", monospace;
+  white-space: pre-wrap;
+}
+
+@media (max-width: 980px) {
+  body {
+    overflow: auto;
+  }
+
+  .shell {
+    grid-template-columns: 1fr;
+    height: auto;
+    min-height: 100vh;
+  }
+
+  .panel {
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .stageColumn {
+    min-height: 720px;
+  }
+}

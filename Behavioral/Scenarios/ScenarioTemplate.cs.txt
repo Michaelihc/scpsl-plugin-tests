@@ -1,0 +1,37 @@
+using System.Collections.Generic;
+using BehaviorTestHarness.Harness;
+using LabApi.Features.Wrappers;
+using PlayerRoles;
+using UnityEngine;
+
+namespace BehaviorTestHarness.Scenarios;
+
+// Copy this file to Scenarios/<FeatureName>Scenario.cs and remove ".txt".
+// Keep scenarios small, deterministic, and focused on behavior that can be
+// observed on the server without a real SCP:SL client.
+public sealed class FeatureNameScenario : IBehaviorScenario
+{
+    public string Name => "feature-name";
+
+    public string Description => "One sentence describing the behavior under test.";
+
+    public IReadOnlyCollection<string> Aliases => [];
+
+    public BehaviorTestResult Run(BehaviorScenarioContext context)
+    {
+        Player actor = context.SpawnDummy("actor");
+        actor.SetRole(RoleTypeId.ClassD, RoleChangeReason.RemoteAdmin, RoleSpawnFlags.AssignInventory);
+        actor.Position = new Vector3(0f, 1000f, 0f);
+
+        // Arrange plugin state here. Server APIs are appropriate for setup.
+        // For meaningful gameplay behavior, prefer RA/dummy actions:
+        // face the target, equip the item, then trigger the dummy action.
+        // Directly invoking damage/effects should be reserved for smoke,
+        // cleanup, or intentionally isolated low-level checks.
+        // Assert the server-visible outcome.
+        context.Require(actor.IsDummy, "expected actor to be a dummy");
+
+        context.Info($"feature observed actor={DummyRegistry.Describe(actor)}");
+        return context.Pass();
+    }
+}

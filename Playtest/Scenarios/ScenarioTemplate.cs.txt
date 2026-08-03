@@ -1,0 +1,88 @@
+// ScenarioTemplate — copy me into <your plugin>\tests\<Plugin>Scenarios\ (or .tests\Playtest\Scenarios
+// for harness-internal checks), rename, and fill in the body.
+//
+// CONTRACT REMINDERS (Playtest Harness v2 — see .tests\docs\part1-harness-v2-plan.html):
+//   * A scenario PASSES only by running to completion. There is no early Pass().
+//     ctx.Require(false, ...) => FAIL. Any other exception => ERROR. Timeout => FAIL (coroutine killed).
+//     Monitor violations during your scenario FAIL it too (unless ctx.ExpectViolations for self-tests).
+//   * Yield REAL waits (ctx.Wait / ctx.WaitUntil). Never fake time with premature asserts.
+//   * BATTERIES-INCLUDED RULE (hard): scenarios call harness verbs ONLY —
+//       actor.GoTo(pos|room)      travel:   quick=raw TP · standard=validated fast-travel · e2e=walk
+//       actor.WalkTo(pos|room)    local movement, walked for real at standard+ (no provider => SKIP)
+//       actor.LookAt(target|pos)  native mouse-look aim, waits for angular tolerance
+//       actor.GiveItem(type)      quick=free · standard=ONLY inside ctx.Arrange · e2e=forbidden
+//       actor.Equip(type)         native item selection + draw time
+//       actor.UseHeldItem()       native item lifecycle — a 20 s charge REALLY takes 20 s
+//       actor.Attack(victim)      equip/ready/aim/fire/hit-confirm, all native, retry w/ timeout
+//       actor.Settle() / Soak(s)  grounded-assert / leave-alone probe
+//       actor.Damage(victim, n)   QUICK-ONLY plumbing; throws at standard+ (shoot dummies instead)
+//     Scenarios NEVER inline aim/rotation/raycast/quaternion/weapon-state/charge-wait mechanics.
+//     If the verb you need does not exist, add it to the HARNESS first — an inlined Quaternion in
+//     a scenario is a defect. Missing item lifecycle => add an adapter in CombatFulfiller.
+//   * STRICT TIER SEMANTICS: Standard and EndToEnd play by IDENTICAL gameplay rules (native,
+//     native-speed). Standard's ONLY two shortcuts: ① fast-travel (probe-validated TP via GoTo),
+//     ② pre-arranged state via ctx.Arrange("reason", ...) — e.g. pre-granting gear. EndToEnd has
+//     ZERO shortcuts: native spawns only (SpawnSpec.At throws), everything walked, no Arrange.
+//   * Spawn actors with ctx.SpawnActor + yield return actor.WaitReady(); never raw DummyUtils.
+//   * Declare an honest Supported range: if your scenario cheats (direct damage, raw placement),
+//     it is Quick-only.
+//   * CONCURRENCY: registering several verbs before one yield runs them in parallel:
+//       a.WalkTo(x); b.WalkTo(y); yield return ctx.WaitOneFrame();   // both walk at once
+//     A single 'yield return actor.Verb()' blocks until that verb completed.
+//
+// using System.Collections.Generic;
+// using PlayerRoles;
+// using PlaytestHarness.Actors;
+// using PlaytestHarness.Core;
+// using PlaytestHarness.Telemetry;
+//
+// namespace MyPlugin.PlaytestScenarios;
+//
+// public sealed class MyFeatureScenario : Scenario
+// {
+//     public override string Name => "my-feature";
+//
+//     public override string[] Aliases => ["myfeat"];
+//
+//     public override string Description => "One-line summary shown by 'ptest list'.";
+//
+//     // Inclusive range. Examples:
+//     //   FidelityRange.All                                    -> quick..e2e
+//     //   new FidelityRange(Fidelity.Standard, Fidelity.EndToEnd)
+//     //   FidelityRange.Only(Fidelity.Quick)
+//     public override FidelityRange Supported => new(Fidelity.Standard, Fidelity.EndToEnd);
+//
+//     // Optional: override the tier-scaled default if your feature has long native waits
+//     // (charge-ups, cooldowns). Standard+ runs everything at native speed on purpose.
+//     // public override float TimeoutSeconds => 300f;
+//
+//     public override IEnumerator<float> Run(ScenarioContext ctx)
+//     {
+//         Actor actor = ctx.SpawnActor("hero", RoleTypeId.ClassD, SpawnSpec.Native());
+//         yield return actor.WaitReady();                              // role + placement + settle
+//
+//         // Standard: fast-travel to the slice under test; e2e: this walks instead.
+//         yield return actor.GoTo(MapGeneration.RoomName.LczToilets);
+//
+//         // Pre-arranged state (standard only; forbidden e2e; logged in telemetry):
+//         if (ctx.Fidelity != Fidelity.EndToEnd)
+//         {
+//             ctx.Arrange("slice starts armed", () => actor.GiveItem(ItemType.GunCOM15));
+//         }
+//
+//         Actor victim = ctx.SpawnActor("victim", RoleTypeId.NtfPrivate, SpawnSpec.Native());
+//         yield return victim.WaitReady();
+//         yield return victim.GoTo(MapGeneration.RoomName.LczToilets);
+//
+//         yield return actor.Attack(victim);                           // ONE line; verbs own the mechanics
+//         ctx.Require(victim.Health < 100f, "victim took real damage");
+//
+//         yield return ctx.Wait(1f);                                   // real wall-clock wait
+//         yield return ctx.WaitUntil(() => SomeCondition(), 10f,       // poll w/ timeout => FAIL
+//             "feature reached expected state");
+//
+//         ctx.Emit(new TelemetryEvent("my_marker", "optional msg"));   // custom JSONL event
+//
+//         // falling off the end == PASS
+//     }
+// }

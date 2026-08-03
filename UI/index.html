@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Hint Display Harness</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="shell">
+    <aside class="panel" aria-label="Preview controls">
+      <header class="panelHeader">
+        <div>
+          <p class="eyebrow">Hint Display</p>
+          <h1>HTML Harness</h1>
+        </div>
+        <span id="statusPill" class="statusPill">Ready</span>
+      </header>
+
+      <label class="field">
+        <span>Fixture</span>
+        <select id="fixtureSelect"></select>
+      </label>
+
+      <div class="controlGrid">
+        <label class="field">
+          <span>Viewport</span>
+          <select id="viewportSelect">
+            <option value="1920x1080">1920 x 1080</option>
+            <option value="2560x1440">2560 x 1440</option>
+            <option value="3440x1440">3440 x 1440</option>
+            <option value="1366x768">1366 x 768</option>
+            <option value="1280x720">1280 x 720</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Zoom</span>
+          <input id="zoomInput" type="range" min="38" max="100" value="76">
+        </label>
+      </div>
+
+      <label class="field">
+        <span>Native Background</span>
+        <select id="backgroundSelect"></select>
+      </label>
+
+      <label class="toggle">
+        <input id="gameUiToggle" type="checkbox">
+        <span>Show minimal game chrome</span>
+      </label>
+
+      <section class="editor" aria-label="Ad hoc hint editor">
+        <div class="sectionTitle">
+          <h2>Ad Hoc Entry</h2>
+          <button id="resetButton" type="button">Reset</button>
+        </div>
+        <label class="toggle">
+          <input id="customToggle" type="checkbox">
+          <span>Render ad hoc entry</span>
+        </label>
+        <textarea id="customText" spellcheck="false"><color=#FF3B30>Custom x0 y500</color></textarea>
+        <div class="triple">
+          <label class="field">
+            <span>X</span>
+            <input id="xInput" type="number" min="-2400" max="2400" step="10" value="0">
+          </label>
+          <label class="field">
+            <span>Y</span>
+            <input id="yInput" type="number" min="0" max="1080" step="10" value="540">
+          </label>
+          <label class="field">
+            <span>Size</span>
+            <input id="sizeInput" type="number" min="6" max="120" step="1" value="28">
+          </label>
+        </div>
+        <label class="field">
+          <span>Alignment</span>
+          <select id="alignSelect">
+            <option value="left">Left</option>
+            <option value="center" selected>Center</option>
+            <option value="right">Right</option>
+          </select>
+        </label>
+      </section>
+
+      <section class="metrics" aria-label="Renderer metrics">
+        <h2>Renderer Model</h2>
+        <dl id="metricsList"></dl>
+      </section>
+
+      <section class="report" aria-label="Validation results">
+        <h2>Validation</h2>
+        <ul id="validationList"></ul>
+      </section>
+    </aside>
+
+    <section class="stageColumn">
+      <div class="stageTopbar">
+        <div>
+          <strong id="viewportLabel"></strong>
+          <span id="fixtureSummary"></span>
+        </div>
+        <button id="copyButton" type="button">Copy Fixture JSON</button>
+      </div>
+      <div id="stage" class="stage" aria-label="SCP:SL preview viewport">
+        <img id="nativeBackground" class="nativeBackground" alt="" aria-hidden="true">
+        <div id="backgroundCollisionLayer" class="backgroundCollisionLayer" aria-hidden="true"></div>
+        <div id="gameMock" class="gameMock" aria-hidden="true"></div>
+        <div id="hintLayer" class="hintLayer" aria-label="Rendered hint entries"></div>
+      </div>
+      <pre id="frameList" class="frameList"></pre>
+    </section>
+  </main>
+
+  <script src="src/preview-core.js"></script>
+  <script src="fixtures.js"></script>
+  <script src="backgrounds.js"></script>
+  <script src="src/app.js"></script>
+</body>
+</html>

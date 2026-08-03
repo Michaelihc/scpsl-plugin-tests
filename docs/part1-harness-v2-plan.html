@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Part 1 — Playtest Harness v2 Plan</title>
+<style>
+  :root{
+    --bg:#101216; --panel:#181b21; --panel2:#1e222a; --ink:#d7dce3; --ink-dim:#8b93a1;
+    --accent:#e8a33d; --accent2:#5aa9e6; --good:#6fbf73; --bad:#e06c5f; --line:#2a2f3a;
+    --mono:'Cascadia Code','Consolas',monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.6 'Segoe UI',system-ui,sans-serif;padding:0 0 80px}
+  .wrap{max-width:980px;margin:0 auto;padding:0 28px}
+  header{border-bottom:1px solid var(--line);padding:40px 0 24px;margin-bottom:32px}
+  h1{font-size:26px;margin:0 0 6px;letter-spacing:.3px}
+  h1 .tag{color:var(--accent);font-family:var(--mono);font-size:15px;vertical-align:middle;margin-left:10px}
+  .meta{color:var(--ink-dim);font-size:13px;font-family:var(--mono)}
+  h2{font-size:19px;margin:44px 0 12px;color:var(--accent);border-bottom:1px solid var(--line);padding-bottom:6px}
+  h3{font-size:15.5px;margin:24px 0 8px;color:var(--accent2)}
+  p{margin:8px 0}
+  code{font-family:var(--mono);font-size:13px;background:var(--panel2);padding:1px 5px;border-radius:4px;color:#e8d5a3}
+  pre{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px 16px;overflow-x:auto;font-family:var(--mono);font-size:12.5px;line-height:1.5;color:#cdd6e0}
+  pre .c{color:#5f6b7a}
+  pre .k{color:#5aa9e6}
+  pre .s{color:#a3c98a}
+  table{border-collapse:collapse;width:100%;margin:12px 0;font-size:13.5px}
+  th,td{border:1px solid var(--line);padding:7px 11px;text-align:left;vertical-align:top}
+  th{background:var(--panel2);color:var(--ink);font-weight:600}
+  td{background:var(--panel)}
+  .pill{display:inline-block;font-family:var(--mono);font-size:11.5px;border-radius:99px;padding:1px 9px;margin-right:4px}
+  .pill.q{background:#2a3a2c;color:var(--good)}
+  .pill.s{background:#233246;color:var(--accent2)}
+  .pill.f{background:#3d2f1e;color:var(--accent)}
+  ul,ol{margin:8px 0;padding-left:24px}
+  li{margin:4px 0}
+  .box{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:6px;padding:12px 16px;margin:14px 0}
+  .box.warn{border-left-color:var(--bad)}
+  .box.info{border-left-color:var(--accent2)}
+  .dim{color:var(--ink-dim)}
+  .stack{font-family:var(--mono);font-size:12.5px;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px 18px;margin:14px 0}
+  .stack .row{display:flex;border-bottom:1px dashed var(--line);padding:6px 0}
+  .stack .row:last-child{border-bottom:none}
+  .stack .lyr{width:110px;flex-shrink:0;color:var(--accent)}
+  .phase{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px 18px;margin:12px 0}
+  .phase h3{margin-top:0}
+  .phase .who{float:right;font-family:var(--mono);font-size:11.5px;color:var(--ink-dim)}
+  kbd{font-family:var(--mono);font-size:12px;background:#242a34;border:1px solid #384051;border-bottom-width:2px;border-radius:4px;padding:0 5px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>Playtest Harness v2 <span class="tag">part 1 / 2</span></h1>
+  <div class="meta">scpsl-plugins-metarepo · plan of record · 2026-07-21 · greenfield in <code>.tests\Playtest</code> · part 2 (AI rounds) designed-for, not built</div>
+</header>
+
+<h2>1 · Context &amp; goals</h2>
+<p>The current harness (<code>.tests\Behavioral</code>) is synchronous, teleport-only, and pushed every real test into ad-hoc auto-run verifier plugins. Consequences observed in the field: dummies spawned mid-air at y=1000, tests passing on server-visible state while real players fell into the void, waits faked with premature <code>Pass()</code> + deferred log lines.</p>
+<p><strong>Part 1 rebuilds the harness greenfield</strong> — new folder, new assembly, no code reuse from the old harness, old style only where it earned it (the raycast/settle probe <em>patterns</em> proven in existing plugin verifier code are lifted as ideas, rewritten clean). The old harness stays untouched and deployed wherever it is; nothing breaks.</p>
+<p><strong>The pattern being automated is the owner's manual playtest loop:</strong> spawn in, teleport to the feature under test (not walk the whole facility), walk around locally, try abilities/items, shoot a few dummies, watch what happens. Teleports are a legitimate tool — the failure mode was never "a TP happened", it was <em>unvalidated</em> TPs (mid-air, into void, inside geometry) treated as safe placement.</p>
+<ul>
+  <li><strong>Coroutine-native scenarios</strong> — waiting, settling, and walking are first-class.</li>
+  <li><strong>Three fidelity tiers</strong> — one scenario source runs at any supported tier.</li>
+  <li><strong>Standard tier = scoped playtest</strong> — same gameplay rules as e2e; the only shortcuts are <em>fast-travel</em> (probe-validated TP) to the slice under test and <em>pre-arranged state</em> (start mid-objective). Everything inside the slice is native, native-speed, dummy-shots-for-damage.</li>
+  <li><strong>EndToEnd tier = the whole path</strong> — native spawns only, all travel bot-walked (spike-verified <code>BotOrders</code>), zero shortcuts: the complete round-like path from spawn to objective.</li>
+  <li><strong>Part 2 seams built in</strong> — orders-style actor API, JSONL telemetry, monitor interface, perception chokepoint identified. Part 2 plugs an AI/LLM brain into the same body.</li>
+</ul>
+
+<div class="box info"><strong>Bot layer (separate track, will be rewritten):</strong> the owner plans to rewrite the bot plugin, so part 1 must <em>not</em> couple to it. The harness defines its own minimal <code>IMovementProvider</code> seam; the current spike <code>BotOrders</code> is just the first pluggable provider behind it. Blocked-edge replanning / clutter recovery stay in the bot track (toy-in-doorway repro is its acceptance test). Part 1 treats a stalled walk as a <em>loud scenario failure</em>, never a hang.</div>
+
+<h2>2 · Architecture</h2>
+<div class="stack">
+  <div class="row"><span class="lyr">Layer 0</span><span>Movement substrate behind <code>IMovementProvider</code> — today: spike <code>BotOrders</code> (native FPC walk, loud STALL/OFF_MESH); tomorrow: the rewritten bot plugin. Swappable, reflection-bound, never a compile-time dep</span></div>
+  <div class="row"><span class="lyr">Layer 1</span><span><strong>← this plan.</strong> <code>PlaytestHarness</code>: actor API + tier fulfillment + probes + telemetry + monitors + runner + <code>ptest</code> command</span></div>
+  <div class="row"><span class="lyr">Layer 2a</span><span>Scripted brains — scenario classes (pilot plugin migration ships here)</span></div>
+  <div class="row"><span class="lyr">Layer 2b/c</span><span class="dim">Part 2: BDI personas, perception filter, LLM commander via file bridge — not built, only not-precluded</span></div>
+  <div class="row"><span class="lyr">Oracles</span><span>Monitor interface + JSONL event stream (part 1 ships bounds/teleport monitors; part 2 adds faction/mission/round-liveness on the same interface)</span></div>
+</div>
+
+<h3>New folder layout</h3>
+<pre>.tests\Playtest\
+  PlaytestHarness.csproj        <span class="c">net48 LabAPI plugin, $(SCP_SL_MANAGED) refs, Deploy.targets</span>
+  Plugin.cs                     <span class="c">entry, config, auto-run hook</span>
+  Core\        Scenario.cs  ScenarioContext.cs  ScenarioRunner.cs  Catalog.cs  Fidelity.cs
+  Actors\      Actor.cs  ActorRegistry.cs  SpawnSpec.cs  MovementFulfiller.cs
+  Movement\    IMovementProvider.cs  BotOrdersProvider.cs   <span class="c">reflection-bound; provider swappable for bot rewrite</span>
+  Probes\      GroundProbe.cs  SettleProbe.cs  BoundsProbe.cs  CapsuleProbe.cs  SoakProbe.cs
+  Telemetry\   EventLog.cs  TelemetryEvent.cs  RunSummary.cs
+  Monitors\    IRoundMonitor.cs  BoundsMonitor.cs  TeleportMonitor.cs  MonitorHost.cs
+  Commands\    PtestCommand.cs
+  Scenarios\   DemoWalkScenario.cs  ScenarioTemplate.cs.txt
+  README.md</pre>
+
+<h3>Core contracts (sketch — implementer refines)</h3>
+<pre><span class="k">public enum</span> Fidelity { Quick, Standard, EndToEnd }        <span class="c">// runner picks one per run</span>
+
+<span class="k">public abstract class</span> Scenario {
+  <span class="k">abstract string</span> Name;  <span class="k">virtual string</span>[] Aliases;  <span class="k">abstract string</span> Description;
+  <span class="k">abstract</span> FidelityRange Supported;                       <span class="c">// e.g. Standard..EndToEnd</span>
+  <span class="k">virtual float</span> TimeoutSeconds =&gt; tier-scaled default;
+  <span class="k">abstract</span> IEnumerator&lt;<span class="k">float</span>&gt; Run(ScenarioContext ctx);   <span class="c">// MEC coroutine — real waits</span>
+}
+
+<span class="c">// ScenarioContext — what a scenario touches</span>
+ctx.Fidelity                          <span class="c">// the tier this run executes at</span>
+ctx.SpawnActor(label, role, SpawnSpec)  <span class="c">// SpawnSpec: NativeRole | At(pos) — At forbidden at EndToEnd</span>
+ctx.Require(cond, msg)  ctx.Info(msg)  ctx.Emit(evt)      <span class="c">// telemetry</span>
+ctx.Wait(s)  ctx.WaitUntil(pred, timeout)
+ctx.Pass() / fail via RequireException                    <span class="c">// result set ON COMPLETION, never early</span>
+
+<span class="c">// Actor — fidelity-adaptive verbs (orders API; part 2 reuses these verbs)</span>
+actor.GoTo(Vector3 | RoomName)        <span class="c">// travel to an objective:</span>
+                                      <span class="c">// Quick: raw TP · Standard: VALIDATED TP (probe target first:</span>
+                                      <span class="c">//   ground within drop, in-bounds, capsule not in geometry → TP → Settle;</span>
+                                      <span class="c">//   invalid target = loud FAIL, exactly the mid-air-spawn bug class)</span>
+                                      <span class="c">// EndToEnd: walk via IMovementProvider; stall/off-mesh/timeout ⇒ loud FAIL</span>
+actor.WalkTo(Vector3 | RoomName)      <span class="c">// local movement AT the objective — walked for real at</span>
+                                      <span class="c">// Standard+ (playtest realism); Quick may TP</span>
+actor.LookAt(target)  actor.GiveItem(t)  actor.UseHeldItem()  actor.Attack(victim)
+                                      <span class="c">// Standard+: these are NATIVE and take native time —</span>
+                                      <span class="c">//   UseHeldItem on a 20 s-charge item spends the 20 s;</span>
+                                      <span class="c">//   Attack = actually aim + fire at the dummy, no stat pokes</span>
+                                      <span class="c">// BATTERIES-INCLUDED CONTRACT: aim alignment (camera pitch/yaw</span>
+                                      <span class="c">//   to hitbox, lead, weapon ready/reload state, melee range approach,</span>
+                                      <span class="c">//   fire-until-hit-confirmed w/ timeout) is implemented ONCE inside</span>
+                                      <span class="c">//   the verb. Scenarios NEVER hand-roll rotation/aim/fire mechanics —</span>
+                                      <span class="c">//   a scenario that needs Quaternion math means a missing verb:</span>
+                                      <span class="c">//   add the verb to the harness, don't inline it.</span>
+actor.Settle(maxDrop)                 <span class="c">// wait grounded ≤ N s, assert no fall/void</span>
+actor.Soak(seconds)                   <span class="c">// leave alone; bounds+ground monitored throughout</span>
+actor.Damage(...)                     <span class="c">// Quick ONLY (setup/smoke plumbing); Standard+ throws —</span>
+                                      <span class="c">//   damage happens by shooting dummies, nothing else</span></pre>
+
+<h3>Tier semantics</h3>
+<div class="box"><strong>Governing principle:</strong> Standard and EndToEnd play by <em>identical gameplay rules</em> — every action native, every action at native speed, damage only by real shots at dummies. They differ in <strong>scope-thinking</strong>, not in what ops are allowed. Standard verifies a <em>slice</em>: fast-travel to it, optionally start with the objective partially completed. EndToEnd verifies the <em>whole path</em>: native spawn to finish, no shortcuts of any kind. Quick is the only tier where non-native shortcuts exist at all.</div>
+<table>
+<tr><th></th><th><span class="pill q">quick</span></th><th><span class="pill s">standard</span></th><th><span class="pill f">end-to-end</span></th></tr>
+<tr><td>Mental model</td><td>fast regression sweep; shortcuts legal</td><td><strong>the automated manual playtest of a slice</strong> — same gameplay rules as e2e, scoped down</td><td>full round-like path: spawn → travel → objective, all played</td></tr>
+<tr><td>Allowed shortcuts</td><td>anything (raw TP, <code>Damage()</code>, skipped waits)</td><td><strong>exactly two</strong>: ① fast-travel (validated TP) to the slice under test · ② pre-arranged state (objective partially completed, items pre-granted) to skip earlier slices. <em>Nothing else.</em></td><td><strong>none</strong></td></tr>
+<tr><td>Travel (<code>GoTo</code>)</td><td>raw TP</td><td><strong>fast-travel</strong> — target probed (ground / bounds / capsule clearance) <em>before</em> the TP, settle after; invalid target = loud FAIL</td><td>walked via <code>IMovementProvider</code>; no TP verb exists</td></tr>
+<tr><td>Movement in-slice (<code>WalkTo</code>)</td><td>may TP</td><td>walked for real</td><td>walked for real</td></tr>
+<tr><td>Item / ability use</td><td>direct calls OK</td><td colspan="2">native use at native speed — a 20 s micro charge takes 20 s; cooldowns, animations, reloads all real</td></tr>
+<tr><td>Damage</td><td><code>Damage()</code> OK (setup/plumbing)</td><td colspan="2"><strong>dummy shots mandatory</strong> — aim and fire at a real dummy; <code>Damage()</code> throws</td></tr>
+<tr><td>Placement</td><td>any position</td><td>fast-travel semantics on every placement</td><td>native role spawn only; <code>SpawnSpec.At</code> throws</td></tr>
+<tr><td>Use case</td><td>CI-ish regression sweep</td><td>default; e.g. GOC nuke: fast-travel to detonation room, then everything native — walk, charge the device its full duration, shoot the defending dummies</td><td>spatial truth: spawn safety, full routes, leave-alone void soaks, mission arcs</td></tr>
+</table>
+
+<h3>Movement provider (swappable seam — bot rewrite planned)</h3>
+<p>The harness owns a minimal <code>IMovementProvider</code> (roughly: <code>bool Available</code>, <code>OrderWalk(hub, target)</code>, <code>Status(hub)</code> → moving/arrived/stalled/off-mesh + reason, <code>Cancel(hub)</code>). <code>BotOrdersProvider</code> implements it by binding to the spike's <code>SCPSLBot.AI.BotOrders</code> via <strong>reflection at startup</strong> — no compile-time reference, so the planned bot-plugin rewrite only has to ship a provider (or matching surface) later; harness code and every scenario stay untouched. No provider on the port ⇒ walk-requiring runs are <strong>skipped with an explicit SKIP result</strong>, never a crash or silent pass.</p>
+
+<h3>Telemetry &amp; monitors (part 2 seam)</h3>
+<pre><span class="c">// One JSONL line per event → &lt;port&gt;\PlaytestHarness\runs\&lt;timestamp&gt;-&lt;level&gt;.jsonl</span>
+{<span class="s">"t"</span>:12.41,<span class="s">"ev"</span>:<span class="s">"order_result"</span>,<span class="s">"actor"</span>:<span class="s">"walker"</span>,<span class="s">"ok"</span>:true,<span class="s">"pos"</span>:[...],<span class="s">"room"</span>:<span class="s">"Lcz173"</span>,<span class="s">"data"</span>:{...}}
+<span class="c">// Human lines keep a stable grep prefix: [Playtest] SCENARIO/STEP/PROBE/RESULT/SUMMARY</span>
+
+<span class="k">interface</span> IRoundMonitor { <span class="k">void</span> OnEvent(TelemetryEvent e); <span class="k">void</span> Tick(); IReadOnlyList&lt;Violation&gt; Violations; }
+<span class="c">// Part 1 ships: BoundsMonitor (TryGetRoom fails / Y sinking / not-grounded &gt; N s)</span>
+<span class="c">//               TeleportMonitor (unordered &gt;1.5 m/tick moves; at EndToEnd ANY TP is a violation)</span>
+<span class="c">// Part 2 adds faction-balance, mission-outcome, round-liveness — same interface, zero rework.</span></pre>
+<p>A run ends with a machine-readable <code>RunSummary</code> JSON (seed, level, per-scenario results, violations) — the future dashboard reads these; no dashboard in part 1.</p>
+
+<h3>Command &amp; auto-run</h3>
+<pre>ptest run &lt;name|all&gt; [quick|standard|e2e]        <span class="c">// default standard</span>
+ptest list | status | cleanup | report           <span class="c">// report = last RunSummary path + digest</span>
+<span class="c">// RA + game console. Headless: config AutoRun{Scenario,Level,DelaySeconds} + final grep line:</span>
+[Playtest] RUN_RESULT level=e2e passed=4 failed=0 skipped=1 summary=&lt;path&gt;</pre>
+
+<h2>3 · Execution phases</h2>
+<p class="dim">All implementation by Fable 5 subagents / workflows launched from this thread; this thread stays orchestration-only. Each phase ends with a build + headless verification before the next starts. Test port: <strong>7911</strong> (7910 keeps the spike demo; grant-owner + seed <code>791021</code> pinned).</p>
+
+<div class="phase"><span class="who">Fable 5 · ~1 session</span><h3>A — Core skeleton (runs quick tier end-to-end)</h3>
+Scaffold csproj/plugin/config · Catalog (reflection discovery, cross-assembly like old harness) · coroutine ScenarioRunner (sequential, per-scenario timeout, cleanup barrier between scenarios, results only on completion) · ScenarioContext basics · EventLog JSONL + grep lines · <code>ptest</code> command + auto-run · a trivial built-in smoke scenario.<br>
+<strong>Exit:</strong> <code>ptest run smoke quick</code> passes headless on 7911; JSONL + RUN_RESULT emitted.</div>
+
+<div class="phase"><span class="who">Fable 5 · ~1 session</span><h3>B — Actors, probes, standard tier (fast-travel + native actions)</h3>
+Actor + ActorRegistry (dummy spawn/track/cleanup, nickname prefix) · SpawnSpec + native-spawn path · Probes library (ground raycast w/ <code>FpcStateProcessor.Mask</code>, settle, capsule overlap from CharacterControllerSettings, bounds/room via <code>RoomUtils</code>/<code>WorldspaceBounds</code>, soak) · <code>GoTo</code> quick (raw TP) + standard (<strong>fast-travel: pre-validate target → TP → settle</strong>) · native action verbs at native speed (<code>GiveItem</code>/<code>UseHeldItem</code> incl. full charge/cooldown waits; <code>Attack</code> = real aim+fire at a dummy; <code>Damage()</code> throws at standard+) — <strong>batteries included</strong>: all aim/rotation/weapon-state/hit-confirm mechanics live inside the verbs; the scenario surface is one-liners, and any scenario found inlining Quaternion/raycast aim math is a defect (the fix is a new harness verb) · MonitorHost + BoundsMonitor.<br>
+<strong>Exit:</strong> a placement-soak scenario passes at quick and standard; deliberately bad <code>GoTo</code> targets (mid-air over void, inside geometry) FAIL loudly at standard while passing quick — the tier contrast demo, i.e. the mid-air-spawn bug class caught by design. Plus a native-action demo: dummy A shoots dummy B with real ballistics and health drops.</div>
+
+<div class="phase"><span class="who">Fable 5 · ~1 session</span><h3>C — Walking (<code>WalkTo</code> + EndToEnd tier) via provider seam</h3>
+<code>IMovementProvider</code> + <code>BotOrdersProvider</code> (reflection-bound, availability probe, SKIP semantics) · <code>WalkTo</code> at standard/e2e (walk order → poll status → stall/off-mesh/timeout ⇒ FAIL with provider's structured reason) · TeleportMonitor · e2e rules (<code>GoTo</code> walks, <code>At()</code>/<code>Damage()</code> throw) · demo scenario: native ClassD spawn → settle → walk a multi-room route → soak 30&nbsp;s at destination.<br>
+<strong>Exit:</strong> demo passes e2e on 7911 (provider present); same run on a provider-less port yields SKIP not failure; standard-tier <code>WalkTo</code> shown working after a fast-travel (the playtest pattern). Watchable in-game like the spike.</div>
+
+<div class="phase"><span class="who">Fable 5 · ~1 session</span><h3>D — Pilot migration (one plugin, chosen at execution time)</h3>
+Pick the pilot when phase D starts — selection criteria: small verifier count, self-contained plugin, spatial behavior worth exercising at standard+e2e, active enough to matter. Create <code>&lt;plugin&gt;\tests\&lt;Plugin&gt;Scenarios\</code> referencing PlaytestHarness (old verifiers left in place) · port its verifiers to tiered scenarios (standard as the workhorse; e2e where travel/spawn fidelity matters) · honor that plugin's documented traps.<br>
+<strong>Exit:</strong> all migrated scenarios pass at standard headless; at least one passes at e2e; transcript per repo test-reporting rules.</div>
+
+<div class="phase"><span class="who">Fable 5 · short</span><h3>E — Docs &amp; adoption</h3>
+<code>.tests\Playtest\README.md</code> (usage, tiers, writing scenarios, template) · update <code>.tests\AGENTS.md</code>: new work targets Playtest harness, tier guidance, old harness marked legacy-maintenance · <strong>codify the batteries-included rule for future agents</strong>: scenarios call verbs (<code>Attack</code>, <code>LookAt</code>, <code>UseHeldItem</code>…), never write aim/align/fire mechanics inline — missing capability ⇒ add a harness verb first · note part 2 seams · memory update.</div>
+
+<h2>4 · Verification (whole-part gate)</h2>
+<ol>
+  <li>Headless loop on 7911 via <code>run-port.ps1</code>: <code>ptest run all</code> at each tier; grep <code>RUN_RESULT</code>; no DummyRoleFiller / old-harness dll on the port.</li>
+  <li>Tier-contrast proof (phase B exit) — invalid TP targets (mid-air, in-geometry) <em>caught by design</em> at standard+; the "spawned mid-air" bug class is dead.</li>
+  <li>E2E proof: demo walk scenario — zero teleport-monitor hits across the full run; user-watchable on request (connect to 7911, <code>ptest run demo-walk e2e</code>).</li>
+  <li>Degradation proof: walk-requiring runs SKIP on a provider-less port.</li>
+  <li>Pilot migration green + summary JSON artifacts inspected.</li>
+  <li>Old harness untouched: <code>scptest</code> still works where deployed; old verifier plugins still compile (no shared code).</li>
+</ol>
+
+<h2>5 · Risks &amp; open items</h2>
+<table>
+<tr><th>Risk</th><th>Stance</th></tr>
+<tr><td>Clutter/obstacle blocks walks (screenshot repro)</td><td>Accepted for part 1: loud FAIL with blocker info; pinned seed keeps demo routes clear. Fix lives in the bot track (rewrite).</td></tr>
+<tr><td>Bot plugin rewrite lands later with a different surface</td><td>Contained by <code>IMovementProvider</code>: the rewrite ships a new provider; harness + scenarios unchanged. Spike <code>BotOrders</code> is a placeholder provider, not a dependency.</td></tr>
+<tr><td>Navmesh coverage (Surface, elevators, special traversal)</td><td>Walked scenarios constrained to covered zones; off-mesh ⇒ structured FAIL. Elevator traversal deferred.</td></tr>
+<tr><td>Validated-TP probe wrong about exotic targets (moving platforms, elevators, pocket dim)</td><td>Probe reports <em>why</em> a target failed; scenarios can opt into <code>Unvalidated</code> TP explicitly (logged as such) for intentionally weird placements.</td></tr>
+<tr><td>Role-stomping plugins re-rolling actor dummies</td><td>Port hygiene (no DummyRoleFiller) + actor role watchdog logs a violation if an external role change hits an owned actor.</td></tr>
+<tr><td>MEC coroutine starvation on empty server (idle mode)</td><td>Harness disables idle mode while a run is active (known lesson from prior verifier work).</td></tr>
+<tr><td>Teleport-threshold false positives under server hitching</td><td>Threshold config-tunable; monitor logs tick delta so false hits are diagnosable.</td></tr>
+</table>
+
+<h2>6 · Explicitly out of scope</h2>
+<p class="dim">Bot plugin rewrite &amp; blocked-edge replanning (own track) · broad verifier migration beyond the single pilot (later &amp; incremental) · part 2 (AI rounds, personas, perception filter, LLM commander, dashboard) · perf validation · client-side rendering truth (UI harness owns it) · any live-server deployment.</p>
+
+</div>
+</body>
+</html>
