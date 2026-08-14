@@ -1,0 +1,21 @@
+# Scenario reflection allowlist — read by lint-scenarios.js.
+# Format:  <path relative to .tests, forward slashes> | <TAG> | <reason>
+# Tags:
+#   GEOMETRY       read-only spatial-anchor probes feeding world-state assertions (the only
+#                  reflection allowed into the plugin under test; no invoke, no SetValue).
+#   LEGACY-MIGRATE pre-rule violator kept green until migrated to RA-command/world-state
+#                  observation. Do NOT add new entries with this tag. This list doubles as
+#                  the migration backlog (audit 2026-08-10).
+#
+Behavioral/Scenarios/WarmupAimFullRoomScenario.cs | LEGACY-MIGRATE | walks WarmupScpSelector private _controller/_aimLane chain + invokes ContainsAimUi; keep raycast/dummy half, move layout equalities to unit tests or a DEBUG snapshot command
+Behavioral/Scenarios/GocBlastLosScenario.cs | LEGACY-MIGRATE | reflective ToUnityVector3 invoke; near-GEOMETRY — read origin/radius via RA diag or config, keep LOS raycast sweep
+Behavioral/Scenarios/GocEvacVantageScenario.cs | LEGACY-MIGRATE | reflectively mutates config + invokes ForceStartCountdown/LockAndDepart; drive via gocnuke start/heli
+Behavioral/Scenarios/GocBatonDummyScenario.cs | LEGACY-MIGRATE | invokes TryApplyManualAntiGravity; drive via existing gocnuke antigravity command
+Behavioral/Scenarios/GocEvacRideScenario.cs | LEGACY-MIGRATE | reflective config mutation + ForceStartCountdown/LockAndDepart/IsEscapee; drive via gocnuke heli/start, assert survival/role/position
+Behavioral/Scenarios/GocDetonationScenario.cs | LEGACY-MIGRATE | invokes SpawnAndLand/BeginBoarding/Play/LockAndDepart/Depart on private services; drive via gocnuke commands
+Behavioral/Scenarios/GocHeliScenario.cs | LEGACY-MIGRATE | invokes SpawnAndLand/Depart, reads IsActive; drive via gocnuke heli spawn/depart
+Behavioral/Scenarios/GocDeviceScenario.cs | LEGACY-MIGRATE | SetValue SiloChargeArmed + invokes RefreshButton; drive via gocnuke armsilo, observe world button state
+Behavioral/Scenarios/GocSigilMergeScenario.cs | LEGACY-MIGRATE | invokes SpawnAffectedSigil + nonpublic ActiveSigilClusterCount; needs world-toy oracle or DEBUG diag to keep cluster-count regression
+Behavioral/Scenarios/GocNukeArmScenario.cs | LEGACY-MIGRATE | SetValue SiloChargeArmed directly; drive via gocnuke armsilo, observe arm log + world effects
+Behavioral/Scenarios/GocSigilScenario.cs | LEGACY-MIGRATE | invokes TryApplyManualAntiGravity; drive via gocnuke antigravity, observe spawned sigil toy
+Behavioral/Scenarios/CustomizableUiSpectatorHudScenario.cs | LEGACY-MIGRATE | reflects CustomizableUIMeow services/stats + inline HSM/native spectator reflection; seed stats via real events or DEBUG command, read output via UiCaptureRecorder

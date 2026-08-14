@@ -18,3 +18,46 @@ Renderer verification:
 
 Live verification:
 - Not run in this pass. The behavioral harness change was build-verified and renderer-verified; live server validation still needs a test scenario with HSM hints loaded.
+
+Date: 2026-08-10
+
+WarmupScpSelector full-room Aim regression:
+- Player screenshot on local port 7777 showed the 19.2 m training shell narrowing from the wider selector gallery, leaving a chokepoint/second-room read.
+- The same screenshot showed no visible weapon pickups; the authored pickups were frozen at floor height.
+- Player report: owned Aim dummies no longer took damage.
+- Added scenario `warmup-aim-full-room` in `Scenarios/WarmupAimFullRoomScenario.cs`.
+- Scenario assertions: selector/training shell widths match; full combined bounds include the SCP-display end, wide edge, and backstop end; five paired seam-floor rays hit authored ground; three full-width forward rays cross the former seam to the backstop; six distinct live kinematic pickup serials sit visibly above one shooting-counter line; a Tutorial walker spawns inside the same bounds over valid floor.
+- Product correction: valid issued-gun hits authorize owned-dummy damage independently of best-effort retaliation initialization.
+
+Build verification:
+- Command: `dotnet build .\.tests\Behavioral\BehaviorTestHarness.csproj -c Release -p:DeployToLocalServer=false`
+- Result: build succeeded, 0 warnings, 0 errors.
+
+Live verification after corrected deployment:
+- Local port: 7777; visible LocalAdmin restart; log: `LocalAdminLogs/7777/LocalAdmin Log 2026-08-10 07.53.13.txt`.
+- Result: PASS. Observed width=37 m, combined verified depth=30.6 m, six persistent counter pickups, three open-seam rays, and eleven floor rays. A Tutorial walker was placed inside the same full-room bounds over valid floor.
+- Stable log result: `[BehaviorTest] autorun Behavior scenario 'warmup-aim-full-room' passed with 4 log event(s).`
+- The one-shot `auto_run_scenario` setting was restored to empty after the pass. In-client confirmation of gun appearance, pickup interaction, and real firearm damage/retaliation remains the final manual check.
+
+Follow-up full-width counter, lighting, and native retaliation regression:
+- Extended `warmup-aim-full-room` to require `ShootingCounterWidth == ShellWidth - 0.6 m`, three low horizontal counter rays at the left edge/centre/right edge, and exactly three very bright point lights (`intensity >= 17.5`, `range >= 14.5`). No HDR material is used.
+- Corrected the focused native verifier so the participant stands on the real player side of the counter and bilateral LOS must clear that geometry; the old beside-the-bot shortcut is gone.
+- Bot return fire now targets the upper portion of a non-head body collider instead of the unusually low body centre of mass.
+- Isolated live port 7997 result: `PASS summary checks=193/193 cleanup=verified manualQaRange=restarted`.
+- Observed real path: native COM15 participant shot consumed ammo `13 -> 12`, damaged the product bot `250 -> 225`, acquired the real attacker, then native bot held fire consumed `40 -> 38` rounds while strafing. The aim point was outside every head collider.
+
+Real-client retaliation follow-up:
+- Port 7777 logs from the reported failure showed the authenticated human joining and the bot-owned solo lobby lock activating, but contained no pickup, damage-routing, aggro, or fire trace. The focused verifier had manually inserted its inventory/session serial instead of using the counter controller's issued-item record.
+- Damage ownership now uses the firearm damage handler's serial against the counter controller's authoritative per-player issued record, then re-synchronizes the activity session. It no longer depends on `Player.CurrentItem` being non-null and matching during the `Hurting` callback.
+- The verifier now calls the real counter `Grant` route. Isolated port 7997 passed `193/193`: counter-issued COM15 serial 458 was recognized, the native shot damaged the bot `250 -> 225`, and immediate native held return fire consumed bot ammo `100 -> 98`.
+- Deployed matching product DLL/PDB to local 7777, enabled product debug logging for the next authenticated-client retry, and restarted visible LocalAdmin successfully.
+
+Bot accuracy, lighting, and UI-only seam follow-up:
+- Authenticated-client 7777 debug logs showed real issued-firearm bot hits routing with `provoked=True`; retaliation activation was correct and the remaining defect was native accuracy.
+- Product bots now hold ADS throughout retaliation and use 0.08 m combat-strafe steps (passive patrol remains 0.45 m), preserving movement while reducing native movement spread. Aim remains inside a non-head body collider.
+- Added a native stationary-attacker contract to `WarmupRangeVerifier`: fire one genuine counter-issued round, stand still, require incoming bot hits, ADS, a changed `LifeId` through the no-spectator lethal reset, restored Tutorial health, and completion within 2.5 seconds.
+- Isolated live port 7997 passed `197/197`. The stationary contract observed incoming hits `30 -> 34`, minimum pre-reset health 19.6, `LifeId 3 -> 8`, restored Tutorial health 100, and elapsed 1.693 s. Bot held fire consumed ammo `100 -> 98`.
+- Lighting follows the same few-bright-lights rule across the combined hall: exactly three ordinary non-HDR point lights at intensity/range `24/16` on the training half and exactly three at `24/18` on the selector half. Per-display/model lights and the former logo HDR boost are absent.
+- The former room seam is UI-only. Both sides remain inside the same activity/session bounds and retain shooting, damage, issued-gun, and bot-provocation mechanics. The selector side shows only the untouched original SCP selection panel; the training side hides it completely and shows only Aim flash/hero/footer hints.
+- `warmup-aim-full-room` now asserts the UI classification and both three-light sets. Local port 7777 passed in `LocalAdmin Log 2026-08-10 08.45.58.txt` with `width=37 counterWidth=36.4 combinedDepth=30.6 counterPickups=6 counterLights=3 selectorLights=3 seamRays=3 counterRays=3 floorRays=11`.
+- Restored the one-shot behavior autorun setting to empty, killed duplicate 7777 chains, and started one clean visible LocalAdmin instance.

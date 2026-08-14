@@ -58,6 +58,32 @@ Interpretation:
 - Verify that spawned roles and objects do not fall through the map. If they do, correct their coordinates/offsets, ideally using game-provided room positions.
 - Prefer RA/dummy actions over direct effects for meaningful gameplay behavior, like spawning a dummy to shoot at a target instead of just calling `Player.Damage(...)`.
 - Direct calls such as `Player.Damage(...)` are acceptable for setup, cleanup, smoke plumbing, or deliberately isolated low-level checks.
+- **No runtime reflection against the plugin under test — for setup, triggering, querying, OR
+  assertions, regardless of member visibility.** Scenarios must observe behavior through the surfaces a
+  player or admin actually has: RA commands (dispatched through the real command processor with an RA
+  sender — never by instantiating the `ICommand` or calling `Execute` directly), public LabAPI
+  wrappers and events, world state (raycasts, dummies, pickups, toys), and emitted logs. Log oracles
+  must be captured after the trigger and correlated to the current run before `Pass()` — not "an
+  operator could grep it". Reflection-based assertions silently break on rename and test internals
+  instead of behavior. Example of the right shape: `civprotest` (real shots + `PlayerEvents.Hurting`).
+- Geometry carve-out (the ONLY allowed reflection into the plugin under test): read-only reflection to
+  obtain spatial anchors — origins, dimensions, bounds, spawn/probe points — as **probe inputs** for
+  world-state assertions (raycasts, dummy settling, pickup/toy positions). It beats hardcoded world
+  coordinates and fails loudly on rename. The reflected value must never be the oracle itself
+  (no `Require(a == b)` between reflected numbers), and no reflective mutation or method invocation.
+- If a behavior has no external signal (internal timers/cooldowns/counters), add ONE permission-gated
+  `#if DEBUG` diagnostic subcommand per plugin (e.g. `<plugin> test <snapshot|fastforward|case>`, both
+  implementation AND registration compiled out of Release) rather than one command per assertion —
+  and still assert the resulting public event/world behavior, not raw private field names. Pure
+  arithmetic/layout invariants with no observable consequence belong in plugin-local unit tests.
+- After adding or editing a scenario, run `node .tests\lint-scenarios.js` (exit 0 required). It
+  hard-fails reflective invoke/mutate in scenario files and flags all other reflection unless the
+  file has a `GEOMETRY | <reason>` entry in `.tests\scenario-reflection-allowlist.txt`. Existing
+  `LEGACY-MIGRATE` entries are the pre-rule migration backlog — never add new ones.
+- Narrow exception: centralized shared-harness adapters (e.g. `Playtest\` fulfillers,
+  `Behavioral\Harness\UiCaptureRecorder`) may reflect **native game internals or approved
+  test-driver/output-provider dependencies** (SCPSLBot, HSM capture) when no supported API exists —
+  never the plugin under test, always behind a typed harness API, and never inline in scenario classes.
 
 ## Think Like A Player — In-Game Probing (REQUIRED)
 

@@ -18,14 +18,14 @@ The scenario uses four owned dummies and checks the real `PlayerEvents.Hurting` 
 
 - Foundation damage to an empty-inventory Class-D is blocked.
 - A medkit does not count as a weapon, so protection remains.
-- A firearm makes the Class-D armed, so Foundation damage applies.
+- A firearm makes the Class-D armed, so Foundation damage applies; removing it restores protection.
 - Chaos damage to an empty-inventory Scientist is blocked.
-- A grenade makes the Scientist armed, so Chaos damage applies.
+- A grenade makes the Scientist armed, so Chaos damage applies; removing it restores protection.
 - Scientist/Class-D damage remains blocked in both directions even while both carry weapons.
 
 The harness cleans its dummies after the run. Evidence is logged with the `[BehaviorTest]` prefix.
 
-## Interactive client/HSM test
+## Interactive live-fire client/HSM test
 
 This test must be run by a connected player from in-game Remote Admin. It temporarily changes the
 participant to Class-D and replaces their inventory. Finishing or cancelling restores the prior role
@@ -39,19 +39,30 @@ also holds the round lock during its two short stages and restores the prior loc
    civprotest start
    ```
 
-   The server spawns a Facility Guard dummy and applies 15 test damage. Health must remain unchanged.
-   Confirm the green `PROTECTED` / `已受保护` HSM hint is visible.
+   You become a Guard with an equipped COM-15. Close RA and shoot both named Class-D dummies once:
+   the left empty-inventory target must be protected, while the right target visibly holding a gun must
+   take damage. The harness records both real shot events, so missing either target cannot pass.
 
 3. Run:
 
    ```text
-   civprotest armed
+   civprotest check
    ```
 
-   The test adds a COM-15, verifies that the red `PROTECTION LOST` / `保护已失效` hint is triggered,
-   and applies 15 damage again. Health must decrease.
+   On pass, you become a Scientist with an equipped COM-15. Close RA and shoot the named armed Class-D
+   target once; Scientist→Class-D damage must be blocked regardless of weapons.
 
-4. Record what you actually saw:
+4. Run:
+
+   ```text
+   civprotest check
+   ```
+
+   On pass, you become a Class-D with an equipped COM-15. Close RA and shoot the named armed Scientist
+   target once; Class-D→Scientist damage must also be blocked.
+
+5. Run `civprotest check` once more, then record whether the amber blocked hints appeared during the
+   three protected shot phases:
 
    ```text
    civprotest finish pass

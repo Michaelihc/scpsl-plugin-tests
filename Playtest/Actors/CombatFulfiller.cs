@@ -1033,7 +1033,17 @@ internal static class CombatFulfiller
     /// AttackerDamageHandler attributing THIS attacker (weapon-typed for firearm attacks, positive
     /// damage output) counts — an unrelated health drop or a plugin's stat write does not.
     /// </summary>
-    internal static IEnumerator<float> Attack(ScenarioContext ctx, Actor attacker, Actor victim)
+    internal static IEnumerator<float> Attack(ScenarioContext ctx, Actor attacker, Actor victim) =>
+        AttackCore(ctx, attacker, victim, targetedPrimary: false);
+
+    internal static IEnumerator<float> AttackTargeted(ScenarioContext ctx, Actor attacker, Actor victim) =>
+        AttackCore(ctx, attacker, victim, targetedPrimary: true);
+
+    private static IEnumerator<float> AttackCore(
+        ScenarioContext ctx,
+        Actor attacker,
+        Actor victim,
+        bool targetedPrimary)
     {
         float initialHealth = victim.Health;
         bool isMelee = IsScpMelee(attacker.Role);
@@ -1107,7 +1117,8 @@ internal static class CombatFulfiller
 
         IEnumerator<float> body = isMelee
             ? MeleeAttackBody(ctx, attacker, victim, () => hurtSeen, ArmMeleeConfirmation, CloseConfirmationWindow)
-            : FirearmAttackBody(ctx, attacker, victim, () => hurtSeen, ArmFirearmConfirmation, CloseConfirmationWindow);
+            : FirearmAttackBody(ctx, attacker, victim, () => hurtSeen, ArmFirearmConfirmation,
+                CloseConfirmationWindow, targetedPrimary);
         LabApi.Events.Handlers.PlayerEvents.Hurt += OnHurt;
         try
         {
@@ -1137,6 +1148,91 @@ internal static class CombatFulfiller
         }
     }
 
+    /// <summary>
+    /// Native-ballistics negative assertion. The firearm still equips, aims, consumes ammunition,
+    /// and reaches PlayerEvents.Hurting, but the final event decision must be cancelled and victim
+    /// health must remain unchanged. Requeueing the observer makes the captured IsAllowed value the
+    /// decision after gameplay plugins that were already enabled for the run.
+    /// </summary>
+    internal static IEnumerator<float> AttackExpectingBlocked(ScenarioContext ctx, Actor attacker, Actor victim)
+    {
+        float initialHealth = victim.Health;
+        bool shotObserved = false;
+        bool? finalAllowed = null;
+        bool confirmationWindowOpen = false;
+        ItemType expectedFirearm = ItemType.None;
+        double confirmationDeadline = 0d;
+        string? confirmedBy = null;
+
+        void ArmConfirmation(ItemType weapon)
+        {
+            expectedFirearm = weapon;
+            confirmationDeadline = ctx.ElapsedSeconds + 1.5d;
+            confirmationWindowOpen = true;
+        }
+
+        void CloseConfirmationWindow() => confirmationWindowOpen = false;
+
+        void OnHurting(LabApi.Events.Arguments.PlayerEvents.PlayerHurtingEventArgs ev)
+        {
+            if (shotObserved || !confirmationWindowOpen || ctx.ElapsedSeconds > confirmationDeadline ||
+                ev.Player?.ReferenceHub != victim.Hub ||
+                ev.Attacker?.ReferenceHub != attacker.Hub)
+            {
+                return;
+            }
+
+            shotObserved = true;
+            confirmationWindowOpen = false;
+            finalAllowed = ev.IsAllowed;
+            confirmedBy = $"{ev.DamageHandler.GetType().Name} from {expectedFirearm} in blocked-shot window";
+        }
+
+        IEnumerator<float> body = FirearmAttackBody(
+            ctx,
+            attacker,
+            victim,
+            () => shotObserved,
+            ArmConfirmation,
+            CloseConfirmationWindow);
+
+        // Place this read-only observer after all handlers currently registered by enabled gameplay
+        // plugins. It never changes the event decision.
+        LabApi.Events.Handlers.PlayerEvents.Hurting -= OnHurting;
+        LabApi.Events.Handlers.PlayerEvents.Hurting += OnHurting;
+        try
+        {
+            while (body.MoveNext())
+            {
+                yield return body.Current;
+            }
+
+            ctx.Require(shotObserved,
+                $"blocked attack from {attacker.Label} to {victim.Label} never reached PlayerEvents.Hurting");
+            ctx.Require(finalAllowed == false,
+                $"expected blocked attack from {attacker.Label} to {victim.Label}, final IsAllowed={finalAllowed}");
+            ctx.Require(Math.Abs(victim.Health - initialHealth) < 0.01f,
+                $"blocked attack changed {victim.Label} health {initialHealth:0.##} -> {victim.Health:0.##}");
+
+            ctx.Emit(new TelemetryEvent("blocked_attack_confirmed", null, new Dictionary<string, object?>
+            {
+                ["attacker"] = attacker.Label,
+                ["victim"] = victim.Label,
+                ["confirmed_by"] = confirmedBy,
+                ["final_allowed"] = finalAllowed,
+                ["health_before"] = Math.Round(initialHealth, 2),
+                ["health_after"] = Math.Round(victim.Health, 2),
+            }));
+            EventLog.Line("STEP",
+                $"blocked attack confirmed attacker={attacker.Label} victim={victim.Label} handler={confirmedBy} finalAllowed={finalAllowed} health {initialHealth:0.#} -> {victim.Health:0.#}");
+        }
+        finally
+        {
+            LabApi.Events.Handlers.PlayerEvents.Hurting -= OnHurting;
+            body.Dispose();
+        }
+    }
+
     internal static bool IsScpMelee(RoleTypeId role) => role is RoleTypeId.Scp049 or RoleTypeId.Scp0492
         or RoleTypeId.Scp096 or RoleTypeId.Scp106 or RoleTypeId.Scp173 or RoleTypeId.Scp939 or RoleTypeId.Scp3114;
 
@@ -1161,7 +1257,8 @@ internal static class CombatFulfiller
     };
 
     private static IEnumerator<float> FirearmAttackBody(ScenarioContext ctx, Actor attacker, Actor victim,
-        Func<bool> hitConfirmed, Action<ItemType> armConfirmation, Action closeConfirmation)
+        Func<bool> hitConfirmed, Action<ItemType> armConfirmation, Action closeConfirmation,
+        bool targetedPrimary = false)
     {
         float attackTimeout = ctx.Config.AttackTimeoutSeconds;
 
@@ -1234,7 +1331,10 @@ internal static class CombatFulfiller
             // readiness/repositioning cannot satisfy this shot, and the window closes before retry.
             int ammoBeforeShot = FirearmAmmoUnits(firearm);
             armConfirmation(firearm.ItemTypeId);
-            foreach (float wait in Coroutines.Pump(TriggerFirearm(attacker, firearm)))
+            IEnumerator<float> trigger = targetedPrimary
+                ? TriggerTargetedAutomaticFirearm(attacker, victim, firearm)
+                : TriggerFirearm(attacker, firearm);
+            foreach (float wait in Coroutines.Pump(trigger))
             {
                 yield return wait;
             }
@@ -1270,6 +1370,43 @@ internal static class CombatFulfiller
         }
 
         EventLog.Line("STEP", $"attack: {attacker.Label} hit {victim.Label} with {firearm.ItemTypeId} after {shots} native shot(s)");
+    }
+
+    /// <summary>
+    /// Headless same-faction adapter. DummyKeyEmulator constructs its own ShotBacktrackData and can
+    /// fail to nominate a friendly player as PrimaryTarget; native hitreg then rejects that friendly
+    /// hitbox before damage. Calling AutomaticActionModule.ServerShoot with the intended target keeps
+    /// the server firearm action (ammo consumption, cycle, hitscan, damage handler, Hurting/Hurt) but
+    /// makes the primary target deterministic. This is deliberately not the default attack path.
+    /// </summary>
+    private static IEnumerator<float> TriggerTargetedAutomaticFirearm(
+        Actor actor,
+        Actor victim,
+        Firearm firearm)
+    {
+        if (!firearm.TryGetModule(out AutomaticActionModule actionModule))
+        {
+            throw new RequireException(
+                $"AttackTargeted: {firearm.ItemTypeId} held by {actor.Label} has no AutomaticActionModule");
+        }
+
+        System.Reflection.MethodInfo method = typeof(AutomaticActionModule).GetMethod(
+                "ServerShoot",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
+            ?? throw new MissingMethodException(typeof(AutomaticActionModule).FullName, "ServerShoot");
+
+        try
+        {
+            method.Invoke(actionModule, new object[] { victim.Hub });
+        }
+        catch (System.Reflection.TargetInvocationException exception) when (exception.InnerException != null)
+        {
+            throw exception.InnerException;
+        }
+
+        EventLog.Line("STEP",
+            $"targeted native firearm action attacker={actor.Label} victim={victim.Label} weapon={firearm.ItemTypeId}");
+        yield return Timing.WaitForOneFrame;
     }
 
     internal static int FirearmAmmoUnits(Firearm firearm)

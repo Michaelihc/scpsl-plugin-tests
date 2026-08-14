@@ -16,6 +16,7 @@ namespace BehaviorTestHarness.Scenarios;
 public sealed class CivilianProtectionScenario : IBehaviorScenario
 {
     private const float TestDamage = 17f;
+    private const int TestArmorPenetration = 100;
 
     public string Name => "civilian-protection";
 
@@ -49,17 +50,30 @@ public sealed class CivilianProtectionScenario : IBehaviorScenario
         classD.AddItem(ItemType.Medkit, ItemAddReason.AdminCommand);
         AssertBlocked(foundation, classD, "foundation-to-classd-with-medkit", context);
 
-        classD.AddItem(ItemType.GunCOM15, ItemAddReason.AdminCommand);
+        Item? classDWeapon = classD.AddItem(ItemType.GunCOM15, ItemAddReason.AdminCommand);
+        context.Require(classDWeapon != null, "failed to add the Class-D test firearm");
         AssertAllowed(foundation, classD, "foundation-to-armed-classd", context);
+        classD.RemoveItem(classDWeapon!);
+        context.Require(!classD.Inventory.UserInventory.Items.Values.Any(static item => item.ItemTypeId == ItemType.GunCOM15),
+            "Class-D test firearm remained in the inventory after removal");
+        AssertBlocked(foundation, classD, "foundation-to-disarmed-classd", context);
 
         AssertBlocked(chaos, scientist, "chaos-to-unarmed-scientist", context);
-        scientist.AddItem(ItemType.GrenadeFlash, ItemAddReason.AdminCommand);
+        Item? scientistWeapon = scientist.AddItem(ItemType.GrenadeFlash, ItemAddReason.AdminCommand);
+        context.Require(scientistWeapon != null, "failed to add the Scientist test grenade");
         AssertAllowed(chaos, scientist, "chaos-to-armed-scientist", context);
+        scientist.RemoveItem(scientistWeapon!);
+        context.Require(!scientist.Inventory.UserInventory.Items.Values.Any(static item => item.ItemTypeId == ItemType.GrenadeFlash),
+            "Scientist test grenade remained in the inventory after removal");
+        AssertBlocked(chaos, scientist, "chaos-to-disarmed-scientist", context);
+
+        classD.AddItem(ItemType.GunCOM15, ItemAddReason.AdminCommand);
+        scientist.AddItem(ItemType.GrenadeFlash, ItemAddReason.AdminCommand);
 
         AssertBlocked(classD, scientist, "armed-classd-to-armed-scientist", context);
         AssertBlocked(scientist, classD, "armed-scientist-to-armed-classd", context);
 
-        context.Info("civilian protection matrix observed cases=7 blocked=5 allowed=2");
+        context.Info("civilian protection matrix observed cases=9 blocked=7 allowed=2 disarmRestorations=2");
         return context.Pass();
     }
 
@@ -77,7 +91,7 @@ public sealed class CivilianProtectionScenario : IBehaviorScenario
     {
         victim.Health = victim.MaxHealth;
         float before = victim.Health;
-        bool applied = victim.Damage(TestDamage, attacker, Vector3.zero, 0);
+        bool applied = victim.Damage(TestDamage, attacker, Vector3.zero, TestArmorPenetration);
         float after = victim.Health;
 
         context.Info($"civilian attack label={label} attacker={DummyRegistry.Describe(attacker)} victim={DummyRegistry.Describe(victim)} health={before:0.##}->{after:0.##} applied={applied}");
@@ -89,7 +103,7 @@ public sealed class CivilianProtectionScenario : IBehaviorScenario
     {
         victim.Health = victim.MaxHealth;
         float before = victim.Health;
-        bool applied = victim.Damage(TestDamage, attacker, Vector3.zero, 0);
+        bool applied = victim.Damage(TestDamage, attacker, Vector3.zero, TestArmorPenetration);
         float after = victim.Health;
 
         context.Info($"civilian attack label={label} attacker={DummyRegistry.Describe(attacker)} victim={DummyRegistry.Describe(victim)} health={before:0.##}->{after:0.##} applied={applied}");

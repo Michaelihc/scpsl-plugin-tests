@@ -199,6 +199,21 @@ public sealed class Actor
     public float LookAt(Actor target) => _ctx.RegisterPending(CombatFulfiller.LookAt(_ctx, this, CombatFulfiller.AimPoint(target.Hub)));
 
     /// <summary>
+    /// Fires a real native firearm shot at another actor and requires the final Hurting decision to
+    /// cancel it with no health loss. This is the blocked counterpart to <see cref="Attack"/>.
+    /// </summary>
+    public float AttackExpectingBlocked(Actor victim)
+        => _ctx.RegisterPending(CombatFulfiller.AttackExpectingBlocked(_ctx, this, victim));
+
+    /// <summary>
+    /// Fires through the native automatic-firearm server action while explicitly identifying the
+    /// intended primary target. Use only for same-faction headless controls whose dummy backtrack
+    /// request cannot reliably select a friendly hitbox.
+    /// </summary>
+    public float AttackTargeted(Actor victim)
+        => _ctx.RegisterPending(CombatFulfiller.AttackTargeted(_ctx, this, victim));
+
+    /// <summary>
     /// Adds an item to the actor's inventory (native ServerAddItem; ammo topped up for firearms).
     /// ARRANGEMENT-AWARE: Quick unrestricted; Standard only inside ctx.Arrange(reason, ...) —
     /// the pre-arranged-state shortcut, telemetry-logged; EndToEnd always rejected.
